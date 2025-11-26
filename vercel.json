@@ -1,0 +1,13 @@
+{
+  "installCommand": "npm install",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next",
+      "config": {
+        "maxLambdaSize": "50mb",
+        "zeroConfig": true
+      }
+    }
+  ]
+}
