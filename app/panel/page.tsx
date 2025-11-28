@@ -1,10 +1,3 @@
-'use client'; 
-
-import { useState, useEffect } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useRouter } from 'next/navigation';
-import React from 'react';
-
 // Inicializa el cliente Supabase
 const supabase = createClientComponentClient();
 
@@ -322,4 +315,5 @@ function CobroForm() {
             {status && <p className="mt-4 text-center text-sm">{status}</p>}
         </form>
     );
+
 }
