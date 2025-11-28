@@ -1,4 +1,7 @@
+import Link from 'next/link';
 import Image from "next/image";
+// Importamos los íconos necesarios para las FeatureCards.
+import { CheckCircle, DollarSign, TrendingUp } from 'lucide-react'; 
 
 export default function Home() {
   return (
@@ -23,7 +26,6 @@ export default function Home() {
             </Link>
 
             {/* CTA secundario: Terrenos en Venta */}
-            {/* Este botón puede vincularse a una página de tu sitio o a una página externa */}
             <a href="https://sites.google.com/view/grupoalfaterrenos/terrenos-en-venta" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-green-700 bg-white hover:bg-gray-100 shadow-lg transition duration-150 ease-in-out">
                 Ver Terrenos en Venta
             </a>
@@ -56,7 +58,7 @@ export default function Home() {
                 title="Planes de Pago Flexibles" 
                 description="Ofrecemos opciones de financiamiento adaptadas a tu presupuesto con enganches accesibles."
             />
-            {/* Ubicaciones Estratégicas */}
+            {/* Alta Plusvalía */}
             <FeatureCard 
                 icon={<TrendingUp className="h-6 w-6 text-green-500" />} 
                 title="Alta Plusvalía" 
@@ -101,7 +103,7 @@ export default function Home() {
   );
 }
 
-// Componente para las tarjetas de características
+// Componente para las tarjetas de características (Va al final del archivo)
 interface FeatureCardProps {
     icon: React.ReactNode;
     title: string;
