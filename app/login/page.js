@@ -1,4 +1,3 @@
-// app/login/page.js
 'use client'; 
 import { useState } from 'react';
 import { supabase } from '../../src/lib/supabase'; // Ruta corregida
@@ -27,34 +26,66 @@ export default function LoginPage() {
       setMessage(`Error de Acceso: ${error.message}`);
     } else {
       setMessage('¡Acceso exitoso! Redireccionando...');
-      // Redirigir al área de clientes / referidos
-      router.push('/referidos'); 
+      // Nota: El archivo /panel/page.tsx que creamos se encargará de verificar la autorización aquí.
+      router.push('/panel'); 
     }
     setLoading(false);
   };
 
-  // Maneja el registro (Sign Up)
+  // ------------------------------------------------------------------
+  // 🟢 FUNCIÓN DE REGISTRO CORREGIDA (Insertando estado PENDIENTE)
+  // ------------------------------------------------------------------
   const handleSignUp = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMessage('');
 
-    // Supabase envía un correo de confirmación al usuario antes de permitir el login
-    const { error } = await supabase.auth.signUp({
+    // 1. Registrar usuario en Supabase Auth (esto envía el email de confirmación)
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        // Opción para que Next.js maneje el callback después de la confirmación
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
 
     if (error) {
       setMessage(`Error de Registro: ${error.message}`);
-    } else {
-      setMessage('¡Registro exitoso! Por favor, revisa tu correo para confirmar tu cuenta.');
+      setLoading(false);
+      return;
     }
+
+    if (data.user) {
+      // 2. Insertar el perfil en la tabla 'clients' con estado PENDIENTE
+      // Esto solo se ejecuta si el registro en auth fue exitoso.
+      const { error: profileError } = await supabase
+        .from('clients') // <-- USANDO TU NOMBRE DE TABLA CORRECTO: 'clients'
+        .insert([
+          { 
+            id: data.user.id, 
+            email: data.user.email,
+            estado_cliente: 'PENDIENTE' // Estado inicial para requerir autorización manual
+          }
+        ]);
+
+      if (profileError) {
+        console.error("Error al crear perfil en 'clients':", profileError);
+        setMessage('Registro de usuario exitoso, pero hubo un error al crear el perfil. Contacta a soporte.');
+        setLoading(false);
+        return;
+      }
+
+      // 3. Mensaje final indicando que debe esperar autorización
+      setMessage('✅ ¡Registro exitoso! Por favor, revisa tu correo electrónico para confirmar tu cuenta. Una vez confirmada, tu acceso quedará en estado PENDIENTE. Un asesor te autorizará pronto.');
+    }
+    
     setLoading(false);
   };
+  // ------------------------------------------------------------------
 
 
-  // Estructura básica de la página con Tailwind CSS (el que instalamos)
+  // Estructura básica de la página con Tailwind CSS
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
       <div className="p-8 bg-white rounded-lg shadow-xl w-full max-w-md">
