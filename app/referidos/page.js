@@ -1,83 +1,371 @@
-// app/referidos/page.js
+<<<<<<< HEAD
 'use client';
-import { useEffect, useState } from 'react';
-import { supabase } from '../../src/lib/supabase'; // Usa la ruta relativa corregida
+
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 
-export default function ReferidosPage() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
+// Inicialización del cliente Supabase
+// **IMPORTANTE**: Si no usas auth-helpers-nextjs, cambia esta línea a:
+// import { supabase } from '../../src/lib/supabase';
+// const supabase = supabase; 
+const supabase = createClientComponentClient();
 
-  // Efecto que se ejecuta al cargar la página para verificar la sesión
-  useEffect(() => {
-    async function checkUser() {
-      // 1. Obtener la sesión actual de Supabase
-      const { data: { user } } = await supabase.auth.getUser();
+// ----------------------------------------------------------------------
+// COMPONENTE PRINCIPAL DE LOGIN/REGISTRO
+// ----------------------------------------------------------------------
 
-      if (!user) {
-        // Si no hay usuario, redirigir al login
-        router.push('/login');
-      } else {
-        // Si hay usuario, guardar su info y mostrar el contenido
-        setUser(user);
-        setLoading(false);
-      }
-    }
-    checkUser();
+export default function Login() {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [view, setView] = useState('sign-in'); // 'sign-in' o 'sign-up'
+    const [statusMessage, setStatusMessage] = useState('');
+    const router = useRouter();
 
-    // Escucha cambios en la autenticación (ej: cuando el usuario cierra sesión)
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          router.push('/login');
+    // 1. Hook para manejar la redirección si el usuario ya está logueado
+    useEffect(() => {
+        const checkUser = async () => {
+            // Intenta obtener la sesión activa
+            const { data: { user } } = await supabase.auth.getUser();
+            
+            if (user) {
+                // Si hay un usuario, redirigir inmediatamente al panel
+                router.push('/panel');
+            }
+        };
+        
+        checkUser();
+    }, [router, supabase]);
+
+    // 2. Función de Inicio de Sesión
+    const handleSignIn = async (e) => {
+        e.preventDefault();
+        setStatusMessage('Iniciando sesión...');
+        
+        const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) {
+            setStatusMessage(`Error: ${error.message}`);
+        } else {
+            // Si es exitoso, el useEffect detectará el cambio y redirigirá.
+            setStatusMessage('Acceso exitoso. Redirigiendo...');
+            router.push('/panel'); 
         }
-      }
-    );
-    return () => {
-        if (authListener) authListener.subscription.unsubscribe();
     };
-  }, [router]);
 
-  // Muestra un mensaje de carga mientras se verifica la sesión
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-xl text-green-700">Verificando acceso al Área de Referidos...</p>
-      </div>
-    );
-  }
+    // 3. Función de Registro (Incluye creación de perfil PENDIENTE)
+    const handleSignUp = async (e) => {
+        e.preventDefault();
+        setStatusMessage('Registrando...');
 
-  // Si el usuario está autenticado, muestra el contenido del área segura
-  if (user) {
-    return (
-      <div className="p-10 bg-gray-50 min-h-screen">
-        <h1 className="text-4xl font-bold text-green-700 mb-6">
-          ¡Bienvenido al Área de Referidos, Cliente de Grupo Alfa!
-        </h1>
-        <p className="text-gray-600 mb-8">
-          Tu correo de acceso es: <strong>{user.email}</strong>
-        </p>
+        // 3a. Registrar usuario en Supabase Auth
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                // Dirección de redirección después de la confirmación por correo
+                emailRedirectTo: `${location.origin}/auth/callback`,
+            },
+        });
 
-        {/* Aquí iría tu formulario de referidos avanzado con acceso a tu base de datos */}
-        <div className="bg-white p-8 rounded-lg shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4">
-                📢 Registra a tus Prospectos
-            </h2>
-            <p className="text-gray-500">
-                Puedes empezar a programar la lógica para guardar los referidos directamente en la tabla de Supabase.
-            </p>
+        if (error) {
+            setStatusMessage(`Error de Registro: ${error.message}`);
+            return;
+        }
+
+        if (data && data.user) {
+            // 3b. Insertar el perfil en la tabla 'clients' con estado PENDIENTE
+            const { error: profileError } = await supabase
+                .from('clients') // Usa tu tabla de perfiles 'clients'
+                .insert([
+                    { 
+                        id: data.user.id, 
+                        email: data.user.email,
+                        estado_cliente: 'PENDIENTE' 
+                    }
+                ]);
+
+            if (profileError) {
+                console.error("Error al crear perfil en 'clients':", profileError);
+                setStatusMessage('Registro de usuario exitoso, pero hubo un error al crear el perfil. Contacta a soporte.');
+                return;
+            }
+
+            // 3c. Mensaje final e ir a la vista de inicio de sesión
+            setStatusMessage('✅ ¡Registro exitoso! Por favor, revisa tu correo para confirmar tu cuenta. Una vez confirmada, tu acceso será PENDIENTE hasta que un asesor lo apruebe.');
+            setEmail('');
+            setPassword('');
+            setView('sign-in');
+        } else {
+            // Caso donde solo se envía el correo y Supabase espera la confirmación
+            setStatusMessage('¡Registro exitoso! Revisa tu correo electrónico para el enlace de confirmación.');
+            setView('sign-in');
+        }
+    };
+
+    const renderForm = () => (
+        <form onSubmit={view === 'sign-in' ? handleSignIn : handleSignUp} className="space-y-4">
+            <div>
+                <label className="block text-sm font-medium text-gray-700">Correo Electrónico</label>
+                <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border text-black"
+                    placeholder="ejemplo@cliente.com"
+                />
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-gray-700">Contraseña</label>
+                <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border text-black"
+                    placeholder="Mínimo 6 caracteres"
+                />
+            </div>
+
             <button
-                onClick={() => supabase.auth.signOut()}
-                className="mt-6 py-2 px-4 border rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                type="submit"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition"
             >
-                Cerrar Sesión
+                {view === 'sign-in' ? 'Iniciar Sesión' : 'Registrarme'}
             </button>
-        </div>
-      </div>
+        </form>
     );
-  }
 
-  // Fallback: Si el loading termina y no hay usuario, redirige al login (aunque ya se hizo antes)
-  return null;
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+            <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+                <h1 className="text-3xl font-extrabold text-center text-gray-900 mb-6">
+                    {view === 'sign-in' ? 'Área de Clientes' : 'Crear Cuenta'}
+                </h1>
+                
+                {renderForm()}
+                
+                {statusMessage && (
+                    <p className={`mt-4 text-center text-sm ${statusMessage.includes('Error') ? 'text-red-500' : 'text-green-600'}`}>
+                        {statusMessage}
+                    </p>
+                )}
+
+                <div className="mt-6 text-center">
+                    {view === 'sign-in' ? (
+                        <p className="text-sm text-gray-600">
+                            ¿No tienes cuenta?{' '}
+                            <button 
+                                onClick={() => { setView('sign-up'); setStatusMessage(''); setEmail(''); setPassword(''); }} 
+                                className="font-medium text-green-600 hover:text-green-500 transition"
+                            >
+                                Regístrate aquí
+                            </button>
+                        </p>
+                    ) : (
+                        <p className="text-sm text-gray-600">
+                            ¿Ya tienes cuenta?{' '}
+                            <button 
+                                onClick={() => { setView('sign-in'); setStatusMessage(''); setEmail(''); setPassword(''); }} 
+                                className="font-medium text-green-600 hover:text-green-500 transition"
+                            >
+                                Inicia Sesión
+                            </button>
+                        </p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 }
+=======
+'use client';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+
+// Inicialización del cliente Supabase
+// **IMPORTANTE**: Si no usas auth-helpers-nextjs, cambia esta línea a:
+// import { supabase } from '../../src/lib/supabase';
+// const supabase = supabase; 
+const supabase = createClientComponentClient();
+
+// ----------------------------------------------------------------------
+// COMPONENTE PRINCIPAL DE LOGIN/REGISTRO
+// ----------------------------------------------------------------------
+
+export default function Login() {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [view, setView] = useState('sign-in'); // 'sign-in' o 'sign-up'
+    const [statusMessage, setStatusMessage] = useState('');
+    const router = useRouter();
+
+    // 1. Hook para manejar la redirección si el usuario ya está logueado
+    useEffect(() => {
+        const checkUser = async () => {
+            // Intenta obtener la sesión activa
+            const { data: { user } } = await supabase.auth.getUser();
+            
+            if (user) {
+                // Si hay un usuario, redirigir inmediatamente al panel
+                router.push('/panel');
+            }
+        };
+        
+        checkUser();
+    }, [router, supabase]);
+
+    // 2. Función de Inicio de Sesión
+    const handleSignIn = async (e) => {
+        e.preventDefault();
+        setStatusMessage('Iniciando sesión...');
+        
+        const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) {
+            setStatusMessage(`Error: ${error.message}`);
+        } else {
+            // Si es exitoso, el useEffect detectará el cambio y redirigirá.
+            setStatusMessage('Acceso exitoso. Redirigiendo...');
+            router.push('/panel'); 
+        }
+    };
+
+    // 3. Función de Registro (Incluye creación de perfil PENDIENTE)
+    const handleSignUp = async (e) => {
+        e.preventDefault();
+        setStatusMessage('Registrando...');
+
+        // 3a. Registrar usuario en Supabase Auth
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                // Dirección de redirección después de la confirmación por correo
+                emailRedirectTo: `${location.origin}/auth/callback`,
+            },
+        });
+
+        if (error) {
+            setStatusMessage(`Error de Registro: ${error.message}`);
+            return;
+        }
+
+        if (data && data.user) {
+            // 3b. Insertar el perfil en la tabla 'clients' con estado PENDIENTE
+            const { error: profileError } = await supabase
+                .from('clients') // Usa tu tabla de perfiles 'clients'
+                .insert([
+                    { 
+                        id: data.user.id, 
+                        email: data.user.email,
+                        estado_cliente: 'PENDIENTE' 
+                    }
+                ]);
+
+            if (profileError) {
+                console.error("Error al crear perfil en 'clients':", profileError);
+                setStatusMessage('Registro de usuario exitoso, pero hubo un error al crear el perfil. Contacta a soporte.');
+                return;
+            }
+
+            // 3c. Mensaje final e ir a la vista de inicio de sesión
+            setStatusMessage('✅ ¡Registro exitoso! Por favor, revisa tu correo para confirmar tu cuenta. Una vez confirmada, tu acceso será PENDIENTE hasta que un asesor lo apruebe.');
+            setEmail('');
+            setPassword('');
+            setView('sign-in');
+        } else {
+            // Caso donde solo se envía el correo y Supabase espera la confirmación
+            setStatusMessage('¡Registro exitoso! Revisa tu correo electrónico para el enlace de confirmación.');
+            setView('sign-in');
+        }
+    };
+
+    const renderForm = () => (
+        <form onSubmit={view === 'sign-in' ? handleSignIn : handleSignUp} className="space-y-4">
+            <div>
+                <label className="block text-sm font-medium text-gray-700">Correo Electrónico</label>
+                <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border text-black"
+                    placeholder="ejemplo@cliente.com"
+                />
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-gray-700">Contraseña</label>
+                <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border text-black"
+                    placeholder="Mínimo 6 caracteres"
+                />
+            </div>
+
+            <button
+                type="submit"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition"
+            >
+                {view === 'sign-in' ? 'Iniciar Sesión' : 'Registrarme'}
+            </button>
+        </form>
+    );
+
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+            <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+                <h1 className="text-3xl font-extrabold text-center text-gray-900 mb-6">
+                    {view === 'sign-in' ? 'Área de Clientes' : 'Crear Cuenta'}
+                </h1>
+                
+                {renderForm()}
+                
+                {statusMessage && (
+                    <p className={`mt-4 text-center text-sm ${statusMessage.includes('Error') ? 'text-red-500' : 'text-green-600'}`}>
+                        {statusMessage}
+                    </p>
+                )}
+
+                <div className="mt-6 text-center">
+                    {view === 'sign-in' ? (
+                        <p className="text-sm text-gray-600">
+                            ¿No tienes cuenta?{' '}
+                            <button 
+                                onClick={() => { setView('sign-up'); setStatusMessage(''); setEmail(''); setPassword(''); }} 
+                                className="font-medium text-green-600 hover:text-green-500 transition"
+                            >
+                                Regístrate aquí
+                            </button>
+                        </p>
+                    ) : (
+                        <p className="text-sm text-gray-600">
+                            ¿Ya tienes cuenta?{' '}
+                            <button 
+                                onClick={() => { setView('sign-in'); setStatusMessage(''); setEmail(''); setPassword(''); }} 
+                                className="font-medium text-green-600 hover:text-green-500 transition"
+                            >
+                                Inicia Sesión
+                            </button>
+                        </p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
+}
+>>>>>>> origin/main
