@@ -121,8 +121,3 @@ export default function Home() {
         </div>
     );
 }
-
-// Este componente va al final del archivo
-// El componente `Link` de next/link no funciona sin un `<a>` dentro en versiones antiguas de Next.js, 
-// pero en Next.js 13/14 la etiqueta `<a>` es redundante y se recomienda usar `legacyBehavior`.
-// Si tienes problemas de navegación, revisa la documentación de `next/link` en tu versión.
